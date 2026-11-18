@@ -1,30 +1,44 @@
 # Codex Live Theater / Codex 现场戏剧
 
-Type a short script, or just an idea. A fast parser turns it into a streamable performance, and the actors start performing on stage as soon as the first beat is ready.
+Type an idea or paste a play excerpt. The first beat starts as soon as the local parser emits it. Watch two procedurally animated actors from your gold seat.
 
-输入一段短剧本，或只写一个想法。系统快速解析成可流式播放的演出，演员在第一段节拍就绪后立刻上台开演。
+输入一个想法或粘贴一段剧本。本地解析器生成第一拍后，演员立即开演。你的观众化身坐在金色座位上。
 
-This is an independent experiment built with Codex CLI. It should feel like live improvisation — much faster than generating an AI comic or video — while keeping the tradition of theater: actors, a stage, a seated audience, and a director who can still call out notes mid-show.
+## Run locally
 
-这是一个由 Codex 独立尝试的实验项目。希望它像现场即兴一样快，比 AI 漫剧 / 视频生成快得多，同时保留戏剧的传统：演员、舞台、坐在观众席里的人，以及中途还能喊一嗓子的导演。
+Use Node.js 20.19+ or 22.12+ and npm.
 
-## Status / 状态
-
-Just getting started. A playable first version will be built here in two Codex rounds.
-
-本仓库刚创建，可玩的第一版会由 Codex 分两轮做出来。
-
-## Run / 运行
-
-```bash
+```sh
 npm install
 npm run dev
 ```
 
-## Notes / 说明
+Open the local URL printed by Vite. Run `npm run build` to create a static production build in `dist/`.
 
-- No API key is required for the default local parser.
-- If you later plug in a streaming AI parser, enter the key in the UI. It is stored only in localStorage and must never be committed.
-- This repository is public. Do not commit tokens, secrets, or `.env` files.
+## Start a scene
 
-默认本地解析器不需要 API key。若以后接入流式 AI 解析器，请在界面里填写密钥，只保存在 localStorage，绝不要提交到仓库。本仓库是公开的，请不要提交 token、密钥或 `.env`。
+Click **Hamlet meets the ghost**, **Last train out**, or **The borrowed hour**. You can also enter your own idea or paste a script into **Live request**. For a script, use a speaker name in capitals on its own line, or write `MARA: Where are you going?`. Put delivery cues in parentheses and stage directions in brackets or Markdown italics. The cast can cross left, right, or center, step back, and turn toward a named character.
+
+The stage uses WebGL. Speech uses the browser’s available voices and tries to assign a different one to each actor. When speech is unavailable or muted, beat timers drive the show and the surtitles stay visible.
+
+## Direct the cast
+
+Use the buttons or type a note during the performance. **Angrier** and **quieter** change the current gestures and upcoming vocal delivery. **Slower**, **faster**, and **normal** change the pacing. **Pause** and **resume** control the show. **Change ending** lets the current beat finish before the cast performs a replacement finale. **Replay** starts the original request again with fresh direction.
+
+## Parsers and secrets
+
+The built-in parser runs entirely in the browser with no key. The [architecture notes](docs/ARCHITECTURE.md) describe the optional async streaming adapter. **Settings** can store a key in this browser’s `localStorage` for testing a future adapter. Save a blank field to clear it. The shipped stub never sends the key or script to any service.
+
+This repository is public. Never commit keys, tokens, or `.env` files. Browser storage is visible to scripts on the same origin, so a future public integration should keep provider credentials server-side.
+
+## Browser debug hook
+
+```js
+window.__theater.startSample('hamlet') // 'station' and 'script' also work
+window.__theater.submit('Hamlet meets the ghost')
+window.__theater.direct('angrier')
+window.__theater.getState()
+window.__theater.replay()
+```
+
+The state snapshot includes beat timing, cast names and positions, and errors. Times are milliseconds relative to the page’s performance time origin. Submission promises resolve when the parser finishes streaming.
