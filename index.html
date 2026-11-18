@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#160f12" />
+    <title>Codex Live Theater</title>
+    <script type="module" crossorigin src="/c-c-7-codex-live-theater/assets/index-BARhojxo.js"></script>
+    <link rel="stylesheet" crossorigin href="/c-c-7-codex-live-theater/assets/index-Cbd6AXp-.css">
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">◈</span
+        ><span>CODEX <b>LIVE THEATER</b></span
+        ><span class="chinese" lang="zh">现场戏剧</span>
+      </div>
+      <button id="settings" class="quiet">Settings</button>
+    </header>
+    <main>
+      <div class="intro">
+        <div>
+          <h1>Live Theater</h1>
+          <p>An idea goes in. The curtain goes up.</p>
+        </div>
+        <div class="show-status">
+          <div id="status" class="status" aria-live="polite">
+            <i></i><span>House open</span>
+          </div>
+          <span id="first-beat" hidden>Started on the first streamed beat</span>
+        </div>
+      </div>
+      <div class="layout">
+        <section class="show" aria-label="Theater">
+          <div class="stage" id="stage">
+            <div class="stage-top">
+              <span>◈ &nbsp; MAIN STAGE</span
+              ><span id="beat-count">STANDBY</span>
+            </div>
+            <div class="stage-cue" id="stage-cue" hidden></div>
+            <div class="seat-label">◆ &nbsp; YOUR SEAT</div>
+          </div>
+          <div class="subtitle" aria-live="polite">
+            <div id="speaker">THE HOUSE</div>
+            <div id="line">
+              The stage is set. Start a scene to bring it to life.
+            </div>
+          </div>
+          <div class="transport">
+            <button id="pause" disabled>Ⅱ &nbsp; Pause</button
+            ><button id="replay" disabled>↻ &nbsp; Replay</button
+            ><button id="sound" aria-pressed="true">♪ &nbsp; Sound on</button>
+          </div>
+          <div id="mobile-notes"></div>
+        </section>
+        <aside class="desk">
+          <section class="request">
+            <h2>Live request</h2>
+            <p>Give the cast an idea or paste a script.</p>
+            <form id="request">
+              <label class="sr" for="script">Idea or script</label
+              ><textarea
+                id="script"
+                placeholder="A ghost walks into a train station…"
+                required
+              ></textarea
+              ><button class="primary" type="submit">
+                Start performance <span aria-hidden="true">↗</span>
+              </button>
+            </form>
+            <div class="samples">
+              <h3>Try a scene</h3>
+              <div id="samples"></div>
+            </div>
+          </section>
+          <section class="direct">
+            <h2>Director’s notes</h2>
+            <p>Give the actors a note while they perform.</p>
+            <div id="desk-notes">
+              <div class="chips" id="notes" role="group" aria-label="Quick director’s notes">
+                <button>Angrier</button><button>Slower</button>
+                <button>Change ending</button>
+              </div>
+            </div>
+            <form id="direction">
+              <label class="sr" for="note">Directing note</label
+              ><input
+                id="note"
+                placeholder="Enter a direction…"
+                required
+              /><button aria-label="Send note">↑</button>
+            </form>
+            <div id="feedback" role="status"></div>
+          </section>
+        </aside>
+      </div>
+      <footer>
+        <span>CODEX LIVE THEATER</span
+        ><span>Procedural actors · Local parser</span>
+      </footer>
+    </main>
+    <dialog id="config">
+      <form method="dialog">
+        <button class="close" aria-label="Close settings">×</button>
+      </form>
+      <h2>Parser settings</h2>
+      <p>
+        The local parser is active. An optional key can be saved for a future
+        streaming adapter.
+      </p>
+      <form id="key-form">
+        <label for="key">API key (optional)</label
+        ><input id="key" type="password" autocomplete="off" /><button
+          class="primary"
+        >
+          Save settings
+        </button>
+      </form>
+    </dialog>
+  </body>
+</html>
