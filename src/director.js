@@ -21,6 +21,8 @@ export class Director {
       firstBeatAt: this.firstBeatAt ?? null,
       startedAt: this.startedAt ?? null,
       startedWhileParsing: this.startedWhileParsing ?? false,
+      firstFrameAt: this.stage?.firstFrameAt ?? null,
+      firstSpeechAt: this.firstSpeechAt ?? null,
       parseDoneAt: this.parseDoneAt ?? null,
       actorNames: [...(this.names ?? [])],
       errors: [...this.errors],
@@ -51,7 +53,7 @@ export class Director {
     this.paused = false
     this.ending = false
     this.alternatePlayed = false
-    this.firstBeatAt = this.startedAt = this.parseDoneAt = null
+    this.firstBeatAt = this.startedAt = this.parseDoneAt = this.firstSpeechAt = null
     this.startedWhileParsing = false
     this.status = 'Reading the scene'
     this.refresh()
@@ -66,7 +68,7 @@ export class Director {
           this.stage?.cast(beat.speaker)
         }
         this.beats.push(beat)
-        if (!this.paused && this.waiting) this.next()
+        if (this.playing && !this.paused && this.waiting) this.next()
         this.refresh()
       }
     } catch (error) {
@@ -75,7 +77,7 @@ export class Director {
     }
     if (abort.signal.aborted) return false
     this.parseDoneAt = performance.now()
-    if (this.waiting && !this.paused) this.next()
+    if (this.playing && this.waiting && !this.paused) this.next()
     this.refresh()
     return true
   }
@@ -92,9 +94,11 @@ export class Director {
     this.stopDelivery()
     const nextIndex = this.index + 1
     let beat = this.beats[nextIndex]
-    if (this.ending && this.current) {
-      const speaker = [...this.names].find(name => name !== this.current.speaker) || this.current.speaker
-      beat = { speaker, line: 'Wait. We can still walk out of here together.', emotion: 'quiet', gesture: 'close', mark: 0, lookAt: this.current.speaker, alternate: true }
+    if (!this.alternatePlayed && this.ending && this.current) {
+      const cast = [...this.names]
+      const partner = this.current.speaker || cast[0] || ''
+      const speaker = cast.find(name => name !== partner) || partner
+      beat = { speaker, line: 'Wait. We can still walk out of here together.', emotion: 'quiet', gesture: 'close', mark: 0, lookAt: speaker === partner ? '' : partner, alternate: true }
       this.alternatePlayed = true
       this.ending = false
     } else if (this.alternatePlayed) {
@@ -103,7 +107,7 @@ export class Director {
     if (!beat) {
       if (this.parseDoneAt !== null || this.alternatePlayed) {
         this.playing = false
-        this.stage?.perform(null)
+        if (!this.alternatePlayed) this.stage?.perform(null)
         this.status = this.current ? 'Curtain call' : 'No beats found'
       } else {
         this.status = 'Waiting for the next beat'
@@ -124,13 +128,33 @@ export class Director {
     this.deliver()
   }
 
-  deliver(speak = true, remaining) {
+  timeLeft(delivery) {
+    return delivery.deadline === null
+      ? delivery.remaining : Math.max(0, delivery.deadline - performance.now())
+  }
+
+  schedule(delivery, owner, remaining) {
+    clearTimeout(this.timer)
+    Object.assign(delivery, { owner, remaining, deadline: null })
+    const ticket = {}
+    delivery.ticket = ticket
+    if (this.paused) return
+    delivery.deadline = performance.now() + remaining
+    this.timer = setTimeout(() => {
+      if (this.delivery === delivery && delivery.ticket === ticket && !this.paused) this.next()
+    }, remaining)
+  }
+
+  deliver() {
     const { line, speaker, emotion } = this.current
-    const duration = remaining ?? (line ? Math.max(1700, 700 + line.length * 48) : 1150) / this.rate
-    const delivery = { at: performance.now(), duration }
+    const duration = line ? Math.max(1700, 700 + line.length * 48) : 1150
+    const canSpeak = line && this.sound && this.speech && window.SpeechSynthesisUtterance
+    const delivery = { duration, speech: canSpeak ? 'queued' : 'finished' }
     this.delivery = delivery
-    this.timer = setTimeout(() => this.next(), duration)
-    if (!speak || !line || !this.sound || !this.speech || !window.SpeechSynthesisUtterance) return
+    this.stage?.setSpeech(canSpeak ? 'queued' : 'estimated')
+    const estimate = duration / this.rate
+    this.schedule(delivery, canSpeak ? 'startup' : 'timer', canSpeak ? Math.max(3500, estimate) : estimate)
+    if (!canSpeak) return
     const utterance = new SpeechSynthesisUtterance(line)
     if (!this.voices.has(speaker)) {
       const available = this.speech.getVoices()
@@ -145,17 +169,22 @@ export class Director {
     utterance.rate = this.rate * (deliveryMood === 'quiet' ? .88 : 1)
     utterance.pitch = Math.min(1.4, ([...this.names].indexOf(speaker) % 2 ? .84 : 1.12) + (deliveryMood === 'angry' ? .16 : 0))
     utterance.onstart = () => {
-      if (this.delivery !== delivery) return
-      delivery.started = true
-      if (this.paused) return
-      clearTimeout(this.timer)
-      this.timer = setTimeout(() => this.next(), Math.max(5500, duration * 2.5))
+      if (this.delivery !== delivery || delivery.speech !== 'queued') return
+      delivery.speech = 'speaking'
+      this.firstSpeechAt ??= performance.now()
+      this.stage?.setSpeech('speaking')
+      this.schedule(delivery, 'speech', Math.max(5500, estimate * 2.5))
     }
-    utterance.onend = () => {
-      if (this.delivery !== delivery || this.paused) return
-      clearTimeout(this.timer)
-      this.timer = setTimeout(() => this.next(), Math.max(240, 1350 / this.rate - (performance.now() - delivery.at)))
+    const finish = failed => {
+      if (this.delivery !== delivery || delivery.speech === 'finished') return
+      delivery.speech = 'finished'
+      this.stage?.setSpeech(failed ? 'estimated' : 'finished')
+      const minimum = this.current.alternate ? 2300 : 1550
+      const settle = this.stage?.estimatedRemaining(minimum) ?? 650 / this.rate
+      this.schedule(delivery, 'timer', failed ? duration / this.rate : Math.max(650 / this.rate, settle))
     }
+    utterance.onend = () => finish(false)
+    utterance.onerror = () => finish(true)
     this.speech.speak(utterance)
   }
 
@@ -163,22 +192,19 @@ export class Director {
     if (!this.playing) return false
     this.paused = !this.paused
     if (this.stage) this.stage.paused = this.paused
+    const delivery = this.delivery
     if (this.paused) {
-      clearTimeout(this.timer)
-      if (this.delivery) {
-        this.delivery.remaining = Math.max(250, this.delivery.duration - (performance.now() - this.delivery.at))
-        this.speech?.pause()
+      if (delivery) {
+        this.schedule(delivery, delivery.owner, this.timeLeft(delivery))
+        if (delivery.speech !== 'finished') this.speech?.pause()
       }
       this.status = 'Paused'
     } else {
       this.status = 'Now performing'
       if (this.waiting) this.next()
-      else if (this.delivery) {
-        const delivery = this.delivery
-        delivery.at = performance.now()
-        delivery.duration = delivery.remaining
-        this.timer = setTimeout(() => this.next(), delivery.started ? Math.max(5500, delivery.duration * 2.5) : delivery.duration)
-        this.speech?.resume()
+      else if (delivery) {
+        this.schedule(delivery, delivery.owner, delivery.remaining)
+        if (delivery.speech !== 'finished') this.speech?.resume()
       }
     }
     this.refresh()
@@ -191,14 +217,13 @@ export class Director {
 
   setSound(sound) {
     this.sound = sound
-    if (!sound && this.delivery) {
-      const remaining = Math.max(250, this.delivery.duration - (performance.now() - this.delivery.at))
-      clearTimeout(this.timer)
-      this.delivery = null
+    const delivery = this.delivery
+    if (!sound && delivery && delivery.speech !== 'finished') {
+      delivery.speech = 'finished'
       this.speech?.cancel()
       this.speech?.resume()
-      if (this.paused) this.delivery = { remaining, at: performance.now(), duration: remaining }
-      else this.deliver(false, remaining)
+      this.stage?.setSpeech('estimated')
+      this.schedule(delivery, 'timer', this.stage?.estimatedRemaining(delivery.duration) ?? delivery.duration / this.rate)
     }
     this.refresh()
   }
@@ -213,30 +238,26 @@ export class Director {
     }
     let response
     const previousRate = this.rate
-    if (/end|finale/.test(note)) {
+    if (/\b(?:end|ending|finale)\b/.test(note)) {
+      if (this.alternatePlayed) return 'The alternate ending is already playing.'
       this.ending = true
       if (this.stage) this.stage.endingQueued = true
       response = 'New ending queued for the next beat.'
-    } else if (/slow|fast|quick|normal/.test(note)) {
-      this.rate = /slow/.test(note) ? .65 : /normal/.test(note) ? 1 : 1.34
-      if (this.stage) this.stage.rate = this.rate
+      if (this.current && this.waiting && !this.paused) this.next()
+    } else if (/\b(?:slow(?:er|ly)?|fast(?:er)?|quick(?:er|ly)?|normal)\b/.test(note)) {
+      this.rate = /\bslow(?:er|ly)?\b/.test(note) ? .65 : /\bnormal\b/.test(note) ? 1 : 1.34
+      this.stage?.setTempo(this.rate)
       response = this.rate < 1 ? 'Taking it slower.' : this.rate > 1 ? 'Picking up the pace.' : 'Returning to the original pace.'
-    } else if (/angr|fury|furious|shout|quiet|soft|whisper|calm/.test(note)) {
-      this.emotion = /angr|fury|furious|shout/.test(note) ? 'angry' : 'quiet'
-      if (this.stage) this.stage.override = this.emotion
+    } else if (/\b(?:angry|angrier|fury|furious|shout|quiet(?:er|ly)?|soft(?:er|ly)?|whisper|calm(?:er)?)\b/.test(note)) {
+      this.emotion = /\b(?:angry|angrier|fury|furious|shout)\b/.test(note) ? 'angry' : 'quiet'
+      this.stage?.setMood(this.emotion)
       response = this.emotion === 'angry' ? 'The cast sharpens their delivery.' : 'The cast softens their delivery.'
     } else {
       return 'Try angrier, quieter, slower, faster, pause, resume, change ending, or replay.'
     }
-    if (this.delivery && previousRate !== this.rate) {
-      const delivery = this.delivery
-      const remaining = Math.max(250, delivery.remaining ?? delivery.duration - (performance.now() - delivery.at))
-      if (this.paused) {
-        delivery.remaining = remaining * previousRate / this.rate
-      } else if (!delivery.started) {
-        clearTimeout(this.timer)
-        this.deliver(false, remaining * previousRate / this.rate)
-      }
+    const delivery = this.delivery
+    if (delivery?.owner === 'timer' && previousRate !== this.rate) {
+      this.schedule(delivery, 'timer', this.timeLeft(delivery) * previousRate / this.rate)
     }
     this.refresh()
     return response

@@ -14,6 +14,12 @@ const velvet = material('#6d273c')
 const avatarFabric = material('#d3a458')
 const skin = material('#dba57e')
 
+function accentAt(seconds) {
+  const rise = T.MathUtils.smoothstep(seconds, .16, .48)
+  const release = T.MathUtils.smoothstep(seconds, .78, 1.32)
+  return rise * (1 - release)
+}
+
 function mesh(parent, geometry, mat, x, y, z, sx, sy, sz) {
   const item = new T.Mesh(geometry, mat)
   item.position.set(x, y, z)
@@ -139,8 +145,31 @@ function buildHouse(scene) {
   for (let i = -5; i <= 5; i++) {
     mesh(scene, box, brick, i * 1.27, 2.9, -4.1, .035, 6.3, .1)
   }
+  const night = group(scene)
+  const station = group(scene)
+  const steel = material('#38474f')
+  mesh(station, box, steel, 0, 4.01, -2.38, 9.6, .17, 2.5).rotation.x = -.12
+  for (const x of [-3.8, 3.8]) mesh(station, box, steel, x, 1.96, -2.16, .15, 3.9, .16)
+  const sign = document.createElement('canvas')
+  sign.width = 512
+  sign.height = 112
+  const ink = sign.getContext('2d')
+  ink.fillStyle = '#223039'
+  ink.fillRect(0, 0, 512, 112)
+  ink.strokeStyle = '#d5c3a0'
+  ink.strokeRect(9, 9, 494, 94)
+  ink.fillStyle = '#ffe3ae'
+  ink.textAlign = 'center'
+  ink.font = 'bold 51px sans-serif'
+  ink.fillText('PLATFORM  2', 256, 74)
+  const signTexture = new T.CanvasTexture(sign)
+  signTexture.colorSpace = T.SRGBColorSpace
+  const board = new T.Mesh(new T.PlaneGeometry(3.3, .72), new T.MeshBasicMaterial({ map: signTexture }))
+  board.position.set(0, 3.48, -2.18)
+  station.add(board)
+  station.visible = false
   // The moon and cutout scenery sit against the upstage wall.
-  mesh(scene, ball, material('#dfc2ad', { emissive: '#bd8b79', emissiveIntensity: .5 }), 3.75, 4.35, -4.03, .59, .59, .055)
+  mesh(night, ball, material('#dfc2ad', { emissive: '#bd8b79', emissiveIntensity: .5 }), 3.75, 4.35, -4.03, .59, .59, .055)
   for (const [x, y, width, height] of [[-4, .13, 6.5, 2.05], [-.2, .1, 6.6, 1.45], [4.1, .03, 6.5, 1.8]]) {
     const hills = new T.Shape()
     hills.moveTo(-width / 2, 0)
@@ -150,12 +179,12 @@ function buildHouse(scene) {
     hills.closePath()
     const silhouette = new T.Mesh(new T.ShapeGeometry(hills), material('#191426', { side: T.DoubleSide }))
     silhouette.position.set(x, y, -3.92 + y)
-    scene.add(silhouette)
+    night.add(silhouette)
   }
   for (let i = 0; i < 23; i++) {
     const x = Math.sin(i * 28.1) * 5.3
     const y = 2 + (Math.sin(i * 17.3) + 1) * 1.55
-    mesh(scene, ball, material('#b396aa', { emissive: '#674d75' }), x, y, -4, .023, .023, .024)
+    mesh(night, ball, material('#b396aa', { emissive: '#674d75' }), x, y, -4, .023, .023, .024)
   }
   for (let i = 0; i < 32; i++) {
     const x = (i - 15.5) * .48
@@ -226,7 +255,13 @@ function buildHouse(scene) {
       }
     }
   }
-  return follow
+  return {
+    follow,
+    setPreset(preset) {
+      station.visible = preset === 'station'
+      night.visible = !station.visible
+    },
+  }
 }
 
 export class TheaterStage {
@@ -241,7 +276,9 @@ export class TheaterStage {
     this.renderer.toneMappingExposure = 1.27
     container.append(this.renderer.domElement)
     this.renderer.domElement.setAttribute('aria-label', '3D stage with two actors and your seated avatar')
-    this.follow = buildHouse(this.scene)
+    const { follow, setPreset } = buildHouse(this.scene)
+    this.follow = follow
+    this.setPreset = setPreset
     this.container = container
     this.ambient = new T.HemisphereLight('#ffdfba', '#483447', 1.7)
     this.scene.add(this.ambient)
@@ -279,14 +316,16 @@ export class TheaterStage {
     }).observe(container)
     let previous = performance.now()
     this.renderer.setAnimationLoop(now => {
-      const dt = Math.min(.05, (now - previous) / 1000)
+      const elapsed = Math.max(0, (now - previous) / 1000)
       previous = now
-      this.update(Math.max(0, dt))
+      this.update(Math.min(.12, elapsed), elapsed)
       this.renderer.render(this.scene, this.camera)
+      if (this.beat) this.firstFrameAt ??= performance.now()
     })
   }
 
   reset() {
+    this.setPreset()
     if (this.castGroup) {
       const old = this.castGroup
       this.scene.remove(old)
@@ -305,10 +344,13 @@ export class TheaterStage {
     this.beat = null
     this.paused = false
     this.rate = 1
+    this.tempoTime = null
     this.override = ''
     this.clock = 0
     this.endingQueued = false
-    this.beatTime = 0
+    this.beatTime = this.accentTime = 0
+    this.firstFrameAt = null
+    this.speech = 'finished'
   }
 
   cast(name) {
@@ -330,24 +372,46 @@ export class TheaterStage {
     this.container.append(person.label)
   }
 
+  setSpeech(speech) {
+    this.speech = speech
+  }
+
+  estimatedRemaining(duration) {
+    return Math.max(450, (duration - (this.clock - this.beatTime) * 1000) / this.rate)
+  }
+
+  setTempo(rate) {
+    if (rate < 1 && this.rate >= 1 && this.clock - this.accentTime > 1.32) this.tempoTime = this.clock
+    if (rate >= 1) this.tempoTime = null
+    this.rate = rate
+  }
+
+  setMood(mood) {
+    if (this.override !== mood) this.accentTime = this.clock
+    this.override = mood
+  }
+
   perform(beat) {
     this.beat = beat
-    this.beatTime = this.clock
+    this.beatTime = this.accentTime = this.clock
+    this.tempoTime = null
+    this.speech = 'finished'
+    if (beat?.alternate) this.endingQueued = false
+    if (beat?.preset) this.setPreset(beat.preset)
     const speaker = this.names.get(beat?.speaker)
     if (!speaker) return
     speaker.mark = beat.mark
     if (beat.alternate) {
-      this.endingQueued = false
       const partner = this.names.get(beat.lookAt)
       if (partner && partner !== speaker) {
         const side = Math.sign(speaker.root.position.x - partner.root.position.x) || 1
-        speaker.mark = side * .88
-        partner.mark = -side * .88
+        speaker.mark = side * 1.18
+        partner.mark = -side * 1.18
       }
     }
   }
 
-  update(dt) {
+  update(dt, elapsed) {
     const beat = this.beat
     const speaker = this.names.get(beat?.speaker)
     const addressed = this.names.get(beat?.lookAt)
@@ -374,31 +438,77 @@ export class TheaterStage {
     this.follow.material.opacity = this.key.intensity / 105
     this.ambient.intensity = T.MathUtils.lerp(this.ambient.intensity, this.paused ? .67 : beat ? 1.28 : 1.7, settle)
 
-    if (!this.paused) this.clock += dt * this.rate
+    if (!this.paused) this.clock += elapsed * this.rate
+    const listener = addressed ?? this.actors.find(other => other !== speaker)
     for (const person of this.actors) {
       const active = speaker === person
-      const partner = active ? addressed ?? this.actors.find(other => other !== person) : speaker
-      if (!this.paused) this.pose(person, partner, active, mood, dt, settle)
-      if (!person.label) continue
+      const listening = person === listener
+      const partner = active ? listener : listening ? speaker : null
+      if (!this.paused) this.pose(person, partner, active, listening, mood, dt, settle)
+    }
+    this.placeLabels(speaker, listener)
+  }
+
+  placeLabels(speaker, listener) {
+    if (!this.width) return
+    const placed = []
+    const order = new Set([speaker, listener, ...this.actors])
+    for (const person of order) {
+      const label = person?.label
+      if (!label) continue
+      label.hidden = true
+      if (!this.beat || Math.abs(person.root.position.x) > 4.7) continue
       person.head.getWorldPosition(this.labelPoint)
       this.labelPoint.y += .68
       this.labelPoint.project(this.camera)
-      const outside = Math.abs(this.labelPoint.x) > .92 || Math.abs(this.labelPoint.y) > .9
-      person.label.hidden = !beat || outside || Math.abs(person.root.position.x) > 4.7
-      person.label.classList.toggle('speaking', active)
-      person.label.style.transform = `translate3d(${(this.labelPoint.x + 1) * this.width / 2}px, ${(1 - this.labelPoint.y) * this.height / 2}px, 0) translate(-50%, -100%)`
+      if (Math.abs(this.labelPoint.x) > .99 || Math.abs(this.labelPoint.y) > .99) continue
+      label.hidden = false
+      label.classList.toggle('speaking', speaker === person)
+      if (person.labelSize?.stageWidth !== this.width) {
+        person.labelSize = { width: label.offsetWidth, height: label.offsetHeight, stageWidth: this.width }
+      }
+      const { width, height } = person.labelSize
+      const x = (this.labelPoint.x + 1) * this.width / 2
+      const y = (1 - this.labelPoint.y) * this.height / 2 - height
+      const left = T.MathUtils.clamp(x - width / 2, 8, this.width - width - 8)
+      const top = Math.max(40, y)
+      const slot = [top, Math.max(40, top - height - 5), top + height + 5].find(candidate =>
+        candidate + height < this.height - 42 && placed.every(rect =>
+          left + width + 5 <= rect.left || left >= rect.right + 5 ||
+          candidate + height + 4 <= rect.top || candidate >= rect.bottom + 4))
+      if (slot === undefined) {
+        label.hidden = true
+        continue
+      }
+      placed.push({ left, right: left + width, top: slot, bottom: slot + height })
+      label.style.transform = `translate3d(${left}px, ${slot}px, 0)`
     }
   }
 
-  pose(person, partner, active, mood, dt, settle) {
+  pose(person, partner, active, listening, mood, dt, settle) {
     const { root, body, head, mouth, arms, legs, phase, shadow } = person
     const t = this.clock
-    const talking = active && Boolean(this.beat?.line)
-    const ending = Boolean(this.beat?.alternate && (active || partner))
+    const acting = active && Boolean(this.beat)
+    const age = t - this.beatTime
+    const accentAge = t - this.accentTime
+    const talking = acting && this.beat.line && (this.speech === 'speaking' ||
+      (this.speech === 'estimated' && age > .12 && age < Math.max(1.3, .45 + this.beat.line.length * .042)))
+    const ending = Boolean(this.beat?.alternate && (active || listening))
     const angry = mood === 'angry' && Boolean(this.beat)
     const quiet = mood === 'quiet' && active
     const uneasy = mood === 'uneasy' && active
-    const delta = person.mark - root.position.x
+    const punch = accentAt(accentAge)
+    const tempoHold = acting && !ending && this.tempoTime !== null ? accentAt(t - this.tempoTime) : 0
+    const prep = T.MathUtils.smoothstep(accentAge, 0, .18) * (1 - T.MathUtils.smoothstep(accentAge, .18, .38))
+    const reaction = listening && !active && this.beat ? accentAt(accentAge - .27) : 0
+    const point = acting && (angry || this.beat.gesture === 'point') && !ending && !quiet
+    const lead = root.rotation.y > .08 ? -1 : 1
+    const recoil = angry ? reaction : 0
+    const tableau = ending ? T.MathUtils.smoothstep(age, .15, .9) : 0
+    const mark = point && partner && Math.abs(person.mark - partner.mark) < 1.85
+      ? partner.mark + (Math.sign(root.position.x - partner.root.position.x) || lead) * 1.85
+      : person.mark
+    const delta = mark - root.position.x
     const walking = Math.abs(delta) > .012
     const turn = Math.sign(delta)
     const facing = partner && partner !== person
@@ -413,21 +523,16 @@ export class TheaterStage {
     shadow.position.x = root.position.x
 
     const breath = Math.sin(t * 2.55 + phase)
-    const phrase = .5 + .5 * Math.sin((t - this.beatTime) * 4.1 + .7)
-    const punch = phrase ** 2
-    const gesture = this.beat?.gesture
-    const point = talking && (angry || gesture === 'point') && !ending && !quiet
-    const lead = root.rotation.y > .08 ? -1 : 1
-    const audienceSide = root.rotation.y >= 0 ? -1 : 1
-    const recoil = !active && angry && partner
-    root.position.y = person.spectral ? .21 + breath * .09 : 0
-    body.position.y = waistHeight + breath * .022 - (quiet ? .055 : 0) - .04 * person.stride
-    body.rotation.x = T.MathUtils.lerp(body.rotation.x, point ? .32 + punch * .14
-      : recoil ? -.19 : ending ? .19 : uneasy ? -.21 : quiet ? .14 : 0, settle)
-    body.rotation.z = breath * .037 + (point ? -lead * .12 : recoil ? audienceSide * .13 : 0)
-    head.rotation.x = T.MathUtils.lerp(head.rotation.x, point ? .14 + punch * .17
-      : uneasy ? -.24 : quiet ? .2 : talking ? -.13 + punch * .23 : -.025, settle)
-    head.rotation.y = Math.sin(t * 1.9 + phase) * .08 + (talking ? -facing * .23 : 0)
+    root.position.y = person.spectral ? .21 + breath * (ending ? .015 : .09) : 0
+    body.position.y = waistHeight + breath * .014 - (point ? .105 * punch : 0) - .04 * person.stride
+    const lean = point ? .49 * punch - .16 * prep : ending ? .13 * tableau
+      : uneasy ? -.23 * punch : quiet ? .24 * punch : .13 * punch * Number(acting)
+    body.rotation.x = T.MathUtils.lerp(body.rotation.x, lean - .36 * recoil + .16 * (reaction - recoil), settle)
+    body.rotation.z = (point ? -lead * .19 * punch : 0) + lead * .28 * recoil
+    head.rotation.x = T.MathUtils.lerp(head.rotation.x, point ? .3 * punch - .17 * prep
+      : uneasy ? -.24 * punch : acting ? .19 * punch - .16 * prep : -.17 * reaction, settle)
+    head.rotation.x += .10 * tempoHold * settle
+    head.rotation.y = -facing * (ending ? .55 * tableau : acting ? .2 : listening ? .68 - .63 * reaction : 0)
     person.brows[0].rotation.z = point ? -.35 : uneasy ? .32 : 0
     person.brows[1].rotation.z = -person.brows[0].rotation.z
     mouth.scale.y = talking ? .018 + Math.abs(Math.sin(t * 16) * Math.cos(t * 5)) * (point ? .083 : .058) : .014
@@ -437,33 +542,38 @@ export class TheaterStage {
       let spread = .16
       let bend = -.22
       if (point) {
-        lift = side === lead ? -1.40 - punch * .20 : -.65 - punch * .33
-        spread = side === lead ? .48 : .73
-        bend = side === lead ? -.13 - (1 - punch) * .42 : -1.08
+        lift -= side === lead ? 1.53 * punch : .28 * punch
+        spread += side === lead ? .37 * punch : .19 * punch
+        bend -= side === lead ? 1.2 * prep : .86 * punch
       } else if (ending) {
-        lift = side === lead ? -.96 - punch * .2 : -.39
-        spread = side === lead ? .42 : .32
-        bend = -.56
-      } else if (recoil || uneasy) {
-        lift = -.67
-        spread = .56
-        bend = -1.26 - punch * .24
+        lift -= (active ? (side === lead ? .83 : .08) : .26) * tableau
+        spread += (active ? .34 : .08) * tableau
+        bend -= (active ? .39 : .78) * tableau
+      } else if (reaction || uneasy) {
+        const deflect = recoil || (uneasy ? punch : 0)
+        lift -= .75 * deflect + .18 * reaction
+        spread += .54 * deflect
+        bend -= 1.22 * deflect
       } else if (quiet) {
-        lift = -.43 - punch * .23
-        spread = .23
-        bend = -1.35
-      } else if (talking) {
-        lift = -.48 - punch * (side === lead ? .64 : .38)
-        spread = .57 + punch * .35
-        bend = -.62 - punch * .48
+        lift -= .4 * punch
+        spread += .12 * punch
+        bend -= 1.23 * punch + .43 * prep
+      } else if (acting) {
+        lift -= (side === lead ? .93 : .22) * punch
+        spread += (side === lead ? .76 : .3) * punch
+        bend -= .63 * punch + .5 * prep
       } else if (walking && !person.spectral) {
         lift += Math.cos(person.walkDistance / 1.06 * Math.PI * 2) * side * .40 * person.stride
+      }
+      if (side === lead) {
+        lift -= .52 * tempoHold
+        bend -= .42 * tempoHold
       }
       shoulder.rotation.x = T.MathUtils.lerp(shoulder.rotation.x, lift, settle)
       shoulder.rotation.z = T.MathUtils.lerp(shoulder.rotation.z, side * spread, settle)
       elbow.rotation.x = T.MathUtils.lerp(elbow.rotation.x, bend, settle)
       elbow.rotation.z = T.MathUtils.lerp(elbow.rotation.z, -side * (quiet ? .47 : talking && !point ? .17 : .06), settle)
-      finger.visible = point && side === lead
+      finger.visible = point && punch > .45 && side === lead
       hand.scale.set(point ? .094 : .083, point ? .089 : .118, .079)
     }
 
@@ -476,7 +586,7 @@ export class TheaterStage {
       const stride = person.spectral ? 0 : person.stride
       const lift = Math.sin(swing * Math.PI) * .22 * stride
       leg.hip.position.y = 1.125 - .045 * stride
-      poseLeg(leg, leg.hip.position.y - .105 - lift, travel * stride + (point ? leg.side * .09 : 0))
+      poseLeg(leg, leg.hip.position.y - .105 - lift, travel * stride + (point ? leg.side * .16 * punch : 0))
     }
     person.motes?.children.forEach((mote, i) => {
       const angle = i * 2.4 + t * .78

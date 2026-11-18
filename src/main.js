@@ -20,6 +20,12 @@ try {
 const script = byId('script')
 const note = byId('note')
 const feedback = byId('feedback')
+const phone = matchMedia('(max-width: 780px)')
+function placeNotes() {
+  byId(phone.matches ? 'mobile-notes' : 'desk-notes').append(byId('notes'))
+}
+phone.addEventListener('change', placeNotes)
+placeNotes()
 
 function display(id, value) {
   if (byId(id).textContent !== value) byId(id).textContent = value
@@ -98,6 +104,10 @@ byId('direction').addEventListener('submit', event => {
   event.preventDefault()
   direct(note.value)
   note.value = ''
+  if (phone.matches && director.playing && stageNode.getBoundingClientRect().top < 0) {
+    note.blur()
+    stageNode.scrollIntoView({ block: 'start' })
+  }
 })
 byId('notes').addEventListener('click', event => {
   if (event.target.matches('button')) direct(event.target.textContent)

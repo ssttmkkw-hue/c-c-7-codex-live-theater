@@ -45,6 +45,22 @@ function* scriptBeats(lines) {
     if (!names.has(normalized)) names.set(normalized, names.size % 2 ? 1.85 : -1.85)
     return normalized
   }
+  function knownName(text) {
+    if (!text) return ''
+    const lower = text.toLowerCase()
+    let match = ''
+    for (const name of names.keys()) {
+      if (name.length <= match.length || !lower.startsWith(name.toLowerCase())) continue
+      if (!/^[\p{L}\p{N}’'-]/u.test(text.slice(name.length))) match = name
+    }
+    return match
+  }
+
+  function gaze(text) {
+    const target = text.match(/\b(?:faces?|looks? at|turns? to)\s+(.+)/iu)?.[1]
+    return knownName(target) || title(target?.match(/^[\p{L}'’-]+/u)?.[0] ?? '')
+  }
+
   function makeLine(line) {
     const inline = line.match(/^\(([^)]+)\)\s*(.*)/)
     if (inline) {
@@ -54,8 +70,7 @@ function* scriptBeats(lines) {
     if (!line) return
     const mark = stageMark(cue, marks.get(speaker) ?? names.get(speaker))
     marks.set(speaker, mark)
-    const look = cue.match(/(?:faces?|looks? at|turns? to)\s+([\p{L}][\p{L}'’-]*)/iu)
-    const result = beat(speaker, line, mark, cue, look ? title(look[1]) : '')
+    const result = beat(speaker, line, mark, cue, gaze(cue))
     cue = ''
     return result
   }
@@ -79,12 +94,12 @@ function* scriptBeats(lines) {
         cue = content
         continue
       }
-      const subject = content.match(/(?:^|[.!]\s+)([\p{Lu}][\p{L}'’-]*)\s+(?:enters?|exits?|crosses?|walks?|steps?|turns?|looks?|moves?|approaches?)\b/u)
-      const actor = subject ? register(subject[1]) : speaker
+      const subject = content.match(/(?:^|[.!]\s+)([\p{L}\p{N} ’'-]+?)\s+(?:enters?|exits?|crosses?|walks?|steps?|turns?|looks?|moves?|approaches?|faces?)\b/iu)?.[1]
+      const actor = knownName(subject) || (subject && /^[\p{Lu}][\p{L}'’-]*(?:\s+[\p{Lu}][\p{L}'’-]*)*$/u.test(subject)
+        ? register(subject) : speaker)
       const mark = stageMark(content, marks.get(actor) ?? names.get(actor) ?? 0)
       if (actor) marks.set(actor, mark)
-      const look = content.match(/(?:faces?|looks? at|turns? to)\s+([\p{L}][\p{L}'’-]*)/iu)
-      yield { ...beat(actor, '', mark, content, look ? title(look[1]) : ''), action: content }
+      yield { ...beat(actor, '', mark, content, gaze(content)), action: content }
       continue
     }
     if (speaker) {
@@ -95,11 +110,12 @@ function* scriptBeats(lines) {
 }
 
 function* ideaBeats(text) {
-  let cast, lines
+  let cast, lines, preset
   if (/\bhamlet\b/i.test(text)) {
     cast = ['Hamlet', 'Ghost']
     lines = ['Speak. I’ll go no further.', 'Mark me, Hamlet. The morning comes, and I must go.', 'You wear my father’s face. What would you have of me?', 'Remember me. But leave your mother to her conscience.', 'Then let the night remember what I swear.']
   } else if (/\b(?:train|railway|platform|station)\b/i.test(text) && !/\b(?:space|orbital|ghost)\b/i.test(text)) {
+    preset = 'station'
     cast = ['Mara', 'Eli']
     lines = ['That’s my bag. Put it down.', 'I was moving it out of the rain.', 'You carried it halfway to the tracks.', 'I thought the last train was coming. Listen.', 'That isn’t a train. Take my hand.']
   } else {
@@ -120,7 +136,9 @@ function* ideaBeats(text) {
   for (const [index, line] of lines.entries()) {
     const actor = index % 2
     const sign = actor ? 1 : -1
-    yield beat(cast[actor], line, sign * (index < 2 ? 1.65 : index < 4 ? .95 : 1.35), index === 3 ? 'quietly' : '', cast[1 - actor])
+    const item = beat(cast[actor], line, sign * (index < 2 ? 1.65 : index < 4 ? .95 : 1.35), index === 3 ? 'quietly' : '', cast[1 - actor])
+    if (index === 0 && preset) item.preset = preset
+    yield item
   }
 }
 

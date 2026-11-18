@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Run `npm run build` to create a static production build in `dist/`.
+Open the local URL printed by Vite. Run `npm run build` to create a static production build in `dist/` with relative asset URLs for hosting at `/c-c-7-codex-live-theater/`.
 
 ## Start a scene
 
@@ -38,6 +38,8 @@ window.__theater.startSample('hamlet') // 'station' and 'script' also work
 window.__theater.submit('Hamlet meets the ghost')
 window.__theater.direct('angrier')
 window.__theater.getState()
+window.__theater.pause() // Toggle pause or resume
+window.__theater.setSound(false)
 window.__theater.replay()
 ```
 

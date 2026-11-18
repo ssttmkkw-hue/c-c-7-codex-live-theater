@@ -29,11 +29,37 @@ In headless Chromium with SwiftShader and sound off, Hamlet’s first beat arriv
 
 Desktop captures at 1280 and 1920 and a mobile capture at 390 showed the active speaker’s label and lighting. The directing check confirmed the lower tempo, a frozen pose during pause, and the alternate line with its own blocking and quiet delivery. No browser errors were reported. The production build succeeded with a bundle-size advisory.
 
+## Round 3
+
+- Each beat has one advancement deadline. A muted beat or the settle after speech can be retimed in place. Queued and speaking utterances retain their rate and their own deadlines, and the next utterance uses the latest rate. Pause preserves the remaining time for the current deadline. Obsolete speech callbacks and timers cannot advance a replacement run.
+- Each beat has a preparation, an accent and a settle. The listener reacts after the accent, with a recoil for anger. Slower stretches the hold and release while the cast stands still. The ending cue lights the stage as soon as it is queued. The replacement finale plays once and ends with both actors on separate marks under a shared light.
+- The station scene swaps the night scenery for a platform sign and canopy on the first beat. Speaker labels get first choice of space. Other labels move or hide when crowded. Script cues resolve multiword cast names already encountered, and phone layouts put the quick notes beside playback.
+- The production build uses relative asset URLs for the repository subpath.
+
+### Round 3 timing
+
+Times are milliseconds after the submission call in headless Chromium with SwiftShader at 1280 px. The frame column records the first animation-loop render that contains the beat, which is a proxy for visible response. The test did not measure physical display presentation. Cold runs followed a page load or reload. Warm runs reused the page.
+
+| Run | Sound | Beat arrival | First surtitle mutation | First acting frame |
+| --- | --- | ---: | ---: | ---: |
+| Cold Hamlet | Off | 2.9 | 3.6 | 18.4 |
+| Warm station | Off | 1.4 | 1.6 | 15.8 |
+| Warm script sample | Off | 2.8 | 2.9 | 8.2 |
+| Warm 2,501-line paste | Off | 2.7 | 2.9 | 23.6 |
+| Cold Hamlet | On | 1.5 | 1.9 | 6.5 |
+| Warm station | On | 0.9 | 1.1 | 10.9 |
+| Warm script sample | On | 1.0 | 1.1 | 7.2 |
+| Warm 2,501-line paste | On | 1.6 | 1.8 | 17.3 |
+
+With 4× CPU throttling, arrival took 3.5–9.8 ms, surtitles took 3.9–10.9 ms and the first acting render took 27.7–94.3 ms. In every run the first surtitle appeared on beat index 0 with `parseDoneAt === null`. Chromium reported no native speech start in the timing runs. A controlled synthesis stub exercised delayed start, mouth gating, pause and resume, rate changes, and callbacks delivered after replay or replacement. It does not provide audio onset timing.
+
+Muted stage captures at 390, 1280 and 1920 px hid the desk and cue text. Playback checks covered the finale requested on the last original beat and during pause, a repeated finale note, mobile note submission, and the text fallback with WebGL and synthesis disabled. The production build was served locally under the repository path.
+
 ## Remaining limitations
 
-- The local parser uses keyword-based scenes and a generic fallback. Unusual prompts may only influence character names or the opening line. The stage has one backdrop.
+- The local parser uses keyword-based scenes and a generic fallback. Unusual prompts may only influence character names or the opening line. The station is the only alternate set.
 - Gestures and mouth motion are procedural. Speech synthesis depends on installed browser voices, and a voice already speaking may finish at its original speed after a tempo note.
-- Walking approximates planted feet during turns and starts or stops. Scripts with several actors or closely spaced marks can overlap, including their projected labels.
+- Walking approximates planted feet during turns and starts or stops. Scripts with several actors or close marks can still overlap onstage. Secondary labels can be hidden when space runs out.
 - Full parse and render timing depend on browser load and WebGL performance. When WebGL is unavailable, the surtitles and controls still work.
 
 ## Run and inspect
@@ -60,4 +86,4 @@ theater.replay()
 theater.submit('Ari and Jules argue over a recipe in a bakery.')
 ```
 
-`startSample` and `submit` return a promise that resolves when parsing finishes. To inspect startup, read `getState()` as soon as the first surtitle appears, before awaiting that promise. Compare `firstBeatAt`, `startedAt`, and `parseDoneAt` using the same page’s `performance.now()` clock.
+`startSample` and `submit` return a promise that resolves when parsing finishes. To inspect startup, read `getState()` as soon as the first surtitle appears, before awaiting that promise. Compare `firstBeatAt`, `startedAt`, `firstFrameAt`, `firstSpeechAt`, and `parseDoneAt` using the same page’s `performance.now()` clock. The frame and speech timestamps stay null until their respective render or browser callback.

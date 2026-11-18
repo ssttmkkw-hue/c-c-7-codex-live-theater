@@ -425,3 +425,7 @@ dialog::backdrop {
     font-size: 10px;
   }
 }
+
+#mobile-notes:not(:empty) {
+  padding: 0 12px 10px;
+}

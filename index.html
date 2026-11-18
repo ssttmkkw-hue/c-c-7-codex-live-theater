@@ -49,6 +49,7 @@
             ><button id="replay" disabled>↻ &nbsp; Replay</button
             ><button id="sound" aria-pressed="true">♪ &nbsp; Sound on</button>
           </div>
+          <div id="mobile-notes"></div>
         </section>
         <aside class="desk">
           <section class="request">
@@ -73,9 +74,11 @@
           <section class="direct">
             <h2>Director’s notes</h2>
             <p>Give the actors a note while they perform.</p>
-            <div class="chips" id="notes">
-              <button>Angrier</button><button>Slower</button
-              ><button>Change ending</button>
+            <div id="desk-notes">
+              <div class="chips" id="notes" role="group" aria-label="Quick director’s notes">
+                <button>Angrier</button><button>Slower</button>
+                <button>Change ending</button>
+              </div>
             </div>
             <form id="direction">
               <label class="sr" for="note">Directing note</label
