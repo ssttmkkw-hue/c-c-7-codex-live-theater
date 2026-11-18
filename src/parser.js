@@ -96,17 +96,26 @@ function* scriptBeats(lines) {
 
 function* ideaBeats(text) {
   let cast, lines
-  if (/hamlet|ghost/i.test(text)) {
+  if (/\bhamlet\b/i.test(text)) {
     cast = ['Hamlet', 'Ghost']
     lines = ['Speak. I’ll go no further.', 'Mark me, Hamlet. The morning comes, and I must go.', 'You wear my father’s face. What would you have of me?', 'Remember me. But leave your mother to her conscience.', 'Then let the night remember what I swear.']
-  } else if (/train|station|rain|strangers/i.test(text)) {
+  } else if (/\b(?:train|railway|platform|station)\b/i.test(text) && !/\b(?:space|orbital|ghost)\b/i.test(text)) {
     cast = ['Mara', 'Eli']
     lines = ['That’s my bag. Put it down.', 'I was moving it out of the rain.', 'You carried it halfway to the tracks.', 'I thought the last train was coming. Listen.', 'That isn’t a train. Take my hand.']
   } else {
     const pair = text.match(/\b([A-Z][a-z]+)\s+(?:meets|and|confronts)\s+([A-Z][a-z]+)\b/)
     cast = pair ? pair.slice(1) : ['Ari', 'Jules']
     const premise = text.replace(/\s+/g, ' ').replace(/[.!?]+$/, '').slice(0, 140)
-    lines = [`You left me a note. “${premise}.” Is this where it happens?`, 'It was supposed to happen after you left.', 'You could have told me. I would have stayed.', 'Then stay now. We still have a choice.', 'All right. Show me what you saw.']
+    if (/\b(?:ghost|haunted|spirit)\b/i.test(text)) {
+      cast = pair ? pair.slice(1) : ['Keeper', 'Ghost']
+      lines = ['I locked this door myself. How did you get in?', 'You locked me in eighty years ago.', 'I’ve been here one week. You must mean someone else.', 'I know. You’re the first one who answered.', 'Then tell me whose name I should call.']
+    } else if (/\b(?:orbit|orbital|spaceship|astronaut|space|moon)\b/i.test(text)) {
+      lines = ['Take your hand off the hatch. Something knocked from the other side.', 'That was me. The radio died before I could call you.', 'Then who’s standing beside me?', 'Ask what it saw when the lights went out.', 'No. We bring you both inside.']
+    } else if (/\b(?:bakery|baker|kitchen|chef|restaurant)\b/i.test(text)) {
+      lines = ['The ovens are cold and there’s a line around the block.', 'They came for the recipe. I put it in the window.', 'That was the only thing my mother left me.', 'It was. Now it’s also in a hundred kitchens.', 'Then light the ovens. We should show them how it’s done.']
+    } else {
+      lines = [`You left me a note. “${premise}.” Is this where it happens?`, 'It was supposed to happen after you left.', 'You could have told me. I would have stayed.', 'Then stay now. We still have a choice.', 'All right. Show me what you saw.']
+    }
   }
   for (const [index, line] of lines.entries()) {
     const actor = index % 2

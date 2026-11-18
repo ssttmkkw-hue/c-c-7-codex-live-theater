@@ -21,8 +21,11 @@
           <h1>Live Theater</h1>
           <p>An idea goes in. The curtain goes up.</p>
         </div>
-        <div id="status" class="status" aria-live="polite">
-          <i></i><span>House open</span>
+        <div class="show-status">
+          <div id="status" class="status" aria-live="polite">
+            <i></i><span>House open</span>
+          </div>
+          <span id="first-beat" hidden>Started on the first streamed beat</span>
         </div>
       </div>
       <div class="layout">
@@ -32,6 +35,7 @@
               <span>◈ &nbsp; MAIN STAGE</span
               ><span id="beat-count">STANDBY</span>
             </div>
+            <div class="stage-cue" id="stage-cue" hidden></div>
             <div class="seat-label">◆ &nbsp; YOUR SEAT</div>
           </div>
           <div class="subtitle" aria-live="polite">

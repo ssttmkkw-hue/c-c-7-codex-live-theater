@@ -17,9 +17,10 @@ export class Director {
       currentBeatIndex: this.index ?? -1,
       currentSpeaker: this.current?.speaker ?? '',
       currentLine: this.current?.line ?? '',
-      currentBeat: this.current ? { ...this.current, emotion: this.emotion || this.current.emotion } : null,
+      currentBeat: this.current ? { ...this.current, emotion: this.current.alternate ? this.current.emotion : this.emotion || this.current.emotion } : null,
       firstBeatAt: this.firstBeatAt ?? null,
       startedAt: this.startedAt ?? null,
+      startedWhileParsing: this.startedWhileParsing ?? false,
       parseDoneAt: this.parseDoneAt ?? null,
       actorNames: [...(this.names ?? [])],
       errors: [...this.errors],
@@ -51,6 +52,7 @@ export class Director {
     this.ending = false
     this.alternatePlayed = false
     this.firstBeatAt = this.startedAt = this.parseDoneAt = null
+    this.startedWhileParsing = false
     this.status = 'Reading the scene'
     this.refresh()
     try {
@@ -92,7 +94,7 @@ export class Director {
     let beat = this.beats[nextIndex]
     if (this.ending && this.current) {
       const speaker = [...this.names].find(name => name !== this.current.speaker) || this.current.speaker
-      beat = { speaker, line: 'Wait. We can still walk out of here together.', emotion: 'quiet', gesture: 'close', mark: 0, lookAt: this.current.speaker }
+      beat = { speaker, line: 'Wait. We can still walk out of here together.', emotion: 'quiet', gesture: 'close', mark: 0, lookAt: this.current.speaker, alternate: true }
       this.alternatePlayed = true
       this.ending = false
     } else if (this.alternatePlayed) {
@@ -112,7 +114,10 @@ export class Director {
     this.waiting = false
     this.current = beat
     this.index = nextIndex
-    this.startedAt ??= performance.now()
+    if (this.startedAt === null) {
+      this.startedAt = performance.now()
+      this.startedWhileParsing = this.parseDoneAt === null
+    }
     this.status = 'Now performing'
     this.stage?.perform(beat)
     this.refresh()
@@ -136,7 +141,7 @@ export class Director {
       if (voice) this.voices.set(speaker, voice)
     }
     if (this.voices.has(speaker)) utterance.voice = this.voices.get(speaker)
-    const deliveryMood = this.emotion || emotion
+    const deliveryMood = this.current.alternate ? emotion : this.emotion || emotion
     utterance.rate = this.rate * (deliveryMood === 'quiet' ? .88 : 1)
     utterance.pitch = Math.min(1.4, ([...this.names].indexOf(speaker) % 2 ? .84 : 1.12) + (deliveryMood === 'angry' ? .16 : 0))
     utterance.onstart = () => {
@@ -210,6 +215,7 @@ export class Director {
     const previousRate = this.rate
     if (/end|finale/.test(note)) {
       this.ending = true
+      if (this.stage) this.stage.endingQueued = true
       response = 'New ending queued for the next beat.'
     } else if (/slow|fast|quick|normal/.test(note)) {
       this.rate = /slow/.test(note) ? .65 : /normal/.test(note) ? 1 : 1.34

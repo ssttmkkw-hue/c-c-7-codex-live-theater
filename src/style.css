@@ -42,7 +42,7 @@ button:disabled {
   outline-offset: 3px;
 }
 .masthead {
-  height: 65px;
+  height: 55px;
   border-bottom: 1px solid #412d2d;
   display: flex;
   align-items: center;
@@ -74,16 +74,16 @@ button:disabled {
   background: transparent;
 }
 main {
-  max-width: 1710px;
+  max-width: 1740px;
   margin: auto;
-  padding: 25px max(4vw, 20px) 0;
+  padding: 17px max(3vw, 20px) 0;
 }
 .intro {
   display: flex;
   align-items: end;
   justify-content: space-between;
   gap: 15px;
-  margin-bottom: 22px;
+  margin-bottom: 14px;
 }
 h1,
 h2 {
@@ -92,7 +92,7 @@ h2 {
   margin: 0;
 }
 h1 {
-  font-size: clamp(44px, 5vw, 76px);
+  font-size: clamp(38px, 3.7vw, 60px);
   letter-spacing: -0.055em;
   line-height: 1;
 }
@@ -150,12 +150,11 @@ h3 {
   flex-direction: column;
 }
 .stage {
-  height: clamp(370px, 36vw, 650px);
+  height: clamp(430px, 37vw, 645px);
   position: relative;
   background: #1d1019;
   overflow: hidden;
-  flex: 1;
-  min-height: 370px;
+  flex: none;
 }
 .stage canvas {
   display: block;
@@ -343,6 +342,7 @@ dialog::backdrop {
     flex: auto;
   }
   .intro {
+    flex-wrap: wrap;
     align-items: start;
   }
   .status {
@@ -367,4 +367,61 @@ dialog::backdrop {
     #211521 64%,
     #521f33
   );
+}
+
+.show-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+#first-beat {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cast-label,
+.stage-cue {
+  position: absolute;
+  z-index: 1;
+  color: #ead1a4;
+  background: #190e16ed;
+  border: 1px solid #78584e;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.cast-label {
+  inset: 0 auto auto 0;
+  max-width: 28%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.cast-label.speaking {
+  background: #f0d49e;
+  color: #26151b;
+  border-color: #f0d49e;
+}
+.stage-cue {
+  bottom: 13px;
+  right: 15px;
+  max-width: 62%;
+  padding: 5px 9px;
+  border-radius: 20px;
+  text-align: right;
+}
+@media (max-width: 440px) {
+  .intro p {
+    margin-bottom: 0;
+  }
+  .show-status {
+    align-items: flex-start;
+  }
+  .cast-label,
+  .stage-cue {
+    font-size: 10px;
+  }
 }

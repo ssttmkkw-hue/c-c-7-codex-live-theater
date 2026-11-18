@@ -28,12 +28,23 @@ function display(id, value) {
 function refresh() {
   const state = director.snapshot()
   const current = state.currentBeat
-  const status = state.playing && !state.paused && state.startedAt !== null && state.currentBeatIndex === 0
-    ? 'First beat ready · now performing'
+  const status = state.playing && !state.paused && current && state.parseDoneAt === null
+    ? 'Performing · streaming'
     : state.status
   const statusText = byId('status').lastElementChild
   if (statusText.textContent !== status) statusText.textContent = status
-  display('beat-count', current ? `BEAT ${String(state.currentBeatIndex + 1).padStart(2, '0')} · ${state.parseDoneAt === null ? 'STREAMING' : 'LIVE'}` : 'STANDBY')
+  byId('first-beat').hidden = !state.startedWhileParsing
+  const phase = state.paused ? 'PAUSED' : !state.playing ? 'CURTAIN CALL'
+    : state.parseDoneAt === null ? 'STREAMING' : 'LIVE'
+  display('beat-count', current ? `BEAT ${String(state.currentBeatIndex + 1).padStart(2, '0')} · ${phase}` : 'STANDBY')
+  const cue = state.playing ? [
+    state.paused ? 'Ⅱ  Performance paused' : '',
+    director.ending ? 'New ending queued' : current?.alternate ? 'Alternate ending' : '',
+    state.rate < 1 ? 'Slower tempo' : state.rate > 1 ? 'Faster tempo' : '',
+    director.emotion && !current?.alternate ? (director.emotion === 'angry' ? 'Angrier delivery' : 'Quieter delivery') : '',
+  ].filter(Boolean).join(' · ') : ''
+  display('stage-cue', cue)
+  byId('stage-cue').hidden = !cue
   display('speaker', current?.line ? current.speaker : current ? 'STAGE DIRECTION' : 'THE HOUSE')
   display('line', current?.line || current?.action || (state.errors.length ? 'The scene could not be read.' : 'The stage is set. Start a scene to bring it to life.'))
   byId('pause').disabled = !state.playing

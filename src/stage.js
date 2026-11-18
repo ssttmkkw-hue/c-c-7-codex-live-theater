@@ -3,6 +3,9 @@ import * as T from 'three'
 const material = (color, extra = {}) => new T.MeshStandardMaterial({ color, roughness: .82, ...extra })
 const box = new T.BoxGeometry(1, 1, 1)
 const ball = new T.SphereGeometry(1, 16, 12)
+const limbs = { thigh: .51, shin: .53 }
+const actorScale = 1.33
+const waistHeight = 1.11
 const cylinder = new T.CylinderGeometry(1, 1, 1, 16)
 const brick = material('#49303a')
 const gold = material('#b78046', { metalness: .44, roughness: .38 })
@@ -31,36 +34,80 @@ function actor(parent, index, x, z) {
   const palette = ['#638269', '#94a8be', '#aa6458', '#8e729d', '#bd8d55']
   const cloth = material(palette[index % palette.length])
   const hair = material(['#39252b', '#8795a7', '#301d20'][index % 3])
+  root.scale.setScalar(actorScale)
   const body = group(root)
-  const torso = mesh(body, new T.CylinderGeometry(.4, .27, .81, 8), cloth, 0, 1.48, 0, 1, 1, .67)
+  mesh(body, new T.CylinderGeometry(.4, .27, .81, 8), cloth, 0, 1.48, 0, 1, 1, .67)
   mesh(body, box, dark, 0, 1.11, 0, .54, .09, .34)
   mesh(body, ball, gold, 0, 1.66, .255, .09, .17, .04)
   const head = group(body, 0, 2.07)
-  mesh(head, cylinder, skin, 0, -.16, 0, .105, .23, .105)
-  mesh(head, ball, skin, 0, .04, 0, .225, .265, .20)
-  mesh(head, ball, hair, 0, .20, -.046, .236, .15, .202)
+  const face = []
+  face.push(mesh(head, cylinder, skin, 0, -.16, 0, .105, .23, .105))
+  face.push(mesh(head, ball, skin, 0, .04, 0, .225, .265, .20))
+  const cap = mesh(head, ball, hair, 0, .20, -.046, .236, .15, .202)
   mesh(head, ball, dark, -.082, .075, .186, .022, .015, .012)
   mesh(head, ball, dark, .082, .075, .186, .022, .015, .012)
-  mesh(head, ball, skin, 0, .025, .196, .039, .045, .041)
+  face.push(mesh(head, ball, skin, 0, .025, .196, .039, .045, .041))
+  const brows = [-1, 1].map(side => mesh(head, box, dark, side * .083, .119, .189, .068, .014, .014))
   const mouth = mesh(head, ball, dark, 0, -.072, .182, .056, .015, .014)
   const arms = [-1, 1].map(side => {
     const shoulder = group(body, side * .36, 1.77)
     mesh(shoulder, ball, cloth, 0, -.2, 0, .12, .29, .126)
     const elbow = group(shoulder, 0, -.39)
     mesh(elbow, ball, cloth, 0, -.15, 0, .095, .22, .093)
-    mesh(elbow, ball, skin, 0, -.34, 0, .084, .108, .079)
-    return { shoulder, elbow, side }
+    const hand = mesh(elbow, ball, skin, 0, -.34, 0, .084, .108, .079)
+    face.push(hand)
+    const finger = mesh(elbow, ball, skin, .033, -.445, .035, .025, .096, .026)
+    face.push(finger)
+    finger.visible = false
+    return { shoulder, elbow, hand, finger, side }
   })
+  body.position.y = waistHeight
+  for (const part of body.children) part.position.y -= waistHeight
   const legs = [-1, 1].map(side => {
-    const hip = group(root, side * .145, 1.15)
+    const hip = group(root, side * .145, 1.095)
     mesh(hip, ball, dark, 0, -.25, 0, .134, .33, .14)
-    const knee = group(hip, 0, -.51)
+    const knee = group(hip, 0, -limbs.thigh)
     mesh(knee, ball, cloth, 0, -.24, 0, .105, .285, .107)
-    mesh(knee, ball, dark, 0, -.53, .065, .12, .11, .202)
-    return { hip, knee, side }
+    const ankle = group(knee, 0, -limbs.shin)
+    mesh(ankle, ball, dark, 0, 0, .065, .12, .105, .202)
+    return { hip, knee, ankle, side }
   })
-  const shadow = mesh(parent, ball, material('#160c17', { transparent: true, opacity: .45, depthWrite: false }), x, .014, z, .57, .014, .31)
-  return { root, body, torso, head, mouth, arms, legs, shadow, mark: x, z, phase: index * 2, actorIndex: index }
+  const shadow = mesh(parent, ball, material('#160c17', { transparent: true, opacity: .45, depthWrite: false }), x, .014, z, .75, .014, .40)
+  return { root, body, head, cap, face, cloth, brows, mouth, arms, legs, shadow, mark: x, z, phase: index * 2, walkDistance: 0 }
+}
+
+function spectralCostume(person) {
+  person.cloth.color.set('#759ccd')
+  person.cloth.emissive.set('#426ea0')
+  person.cloth.emissiveIntensity = .55
+  const porcelain = material('#c4ddf3', { emissive: '#618ec5', emissiveIntensity: .45 })
+  for (const part of person.face) part.material = porcelain
+  person.cap.visible = false
+  const mantle = material('#415d89', { emissive: '#416fb6', emissiveIntensity: .45 })
+  mesh(person.body, new T.CylinderGeometry(.39, .48, 1.31, 8), mantle, 0, 1.16 - waistHeight, -.145, 1.15, 1, .38)
+  mesh(person.body, new T.CylinderGeometry(.19, .5, .27, 8), person.cloth, 0, 1.83 - waistHeight, -.04, 1, 1, .68)
+  const crown = material('#aedcff', { emissive: '#76c7ff', emissiveIntensity: 1.15 })
+  mesh(person.head, cylinder, crown, 0, .233, -.025, .209, .058, .192)
+  for (let i = 0; i < 5; i++) {
+    const point = mesh(person.head, box, crown, (i - 2) * .082, .29, .123, .064, i === 2 ? .18 : .11, .053)
+    point.rotation.z = Math.PI / 4
+  }
+  const motes = group(person.root)
+  for (let i = 0; i < 8; i++) {
+    mesh(motes, ball, crown, 0, 0, 0, .023, .023, .023)
+  }
+  person.motes = motes
+}
+
+// Solve the two leg joints from the ankle target and keep the sole level.
+function poseLeg(leg, y, z) {
+  const { thigh, shin } = limbs
+  const reach = Math.min(thigh + shin - .001, Math.hypot(y, z))
+  const cosine = (reach ** 2 - thigh ** 2 - shin ** 2) / (2 * thigh * shin)
+  const bend = Math.acos(T.MathUtils.clamp(cosine, -1, 1))
+  leg.hip.rotation.x = -Math.atan2(z, y) - Math.atan2(shin * Math.sin(bend), thigh + shin * Math.cos(bend))
+  leg.knee.rotation.x = bend
+  leg.ankle.rotation.x = -leg.hip.rotation.x - bend
 }
 
 function curtain(parent, x, y, width, height, z, color, swag = false) {
@@ -93,7 +140,7 @@ function buildHouse(scene) {
     mesh(scene, box, brick, i * 1.27, 2.9, -4.1, .035, 6.3, .1)
   }
   // The moon and cutout scenery sit against the upstage wall.
-  mesh(scene, ball, material('#dfc2ad', { emissive: '#bd8b79', emissiveIntensity: .5 }), 2.8, 4.35, -4.03, .59, .59, .055)
+  mesh(scene, ball, material('#dfc2ad', { emissive: '#bd8b79', emissiveIntensity: .5 }), 3.75, 4.35, -4.03, .59, .59, .055)
   for (const [x, y, width, height] of [[-4, .13, 6.5, 2.05], [-.2, .1, 6.6, 1.45], [4.1, .03, 6.5, 1.8]]) {
     const hills = new T.Shape()
     hills.moveTo(-width / 2, 0)
@@ -132,6 +179,12 @@ function buildHouse(scene) {
     pool.rotation.x = -Math.PI / 2
     scene.add(pool)
   }
+  const follow = new T.Mesh(new T.PlaneGeometry(4.6, 4.2), new T.MeshBasicMaterial({
+    map: poolTexture, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0,
+  }))
+  follow.rotation.x = -Math.PI / 2
+  follow.position.y = .009
+  scene.add(follow)
   mesh(scene, box, dark, 0, -.5, 4.07, 15.4, .88, .3)
   for (const y of [-.14, -.64]) mesh(scene, box, gold, 0, y, 4.24, 15.5, .052, .08)
   for (let i = -7; i <= 7; i++) {
@@ -173,6 +226,7 @@ function buildHouse(scene) {
       }
     }
   }
+  return follow
 }
 
 export class TheaterStage {
@@ -187,8 +241,15 @@ export class TheaterStage {
     this.renderer.toneMappingExposure = 1.27
     container.append(this.renderer.domElement)
     this.renderer.domElement.setAttribute('aria-label', '3D stage with two actors and your seated avatar')
-    buildHouse(this.scene)
-    this.scene.add(new T.HemisphereLight('#ffdfba', '#483447', 1.7))
+    this.follow = buildHouse(this.scene)
+    this.container = container
+    this.ambient = new T.HemisphereLight('#ffdfba', '#483447', 1.7)
+    this.scene.add(this.ambient)
+    this.key = new T.SpotLight('#ffdcaa', 0, 12, .37, .72)
+    this.scene.add(this.key, this.key.target)
+    this.lightColor = new T.Color()
+    this.slowTint = new T.Color('#ac94ee')
+    this.labelPoint = new T.Vector3()
     const fill = new T.DirectionalLight('#ecc3a6', 1.55)
     fill.position.set(0, 4, 8)
     this.scene.add(fill)
@@ -207,11 +268,14 @@ export class TheaterStage {
       if (!width || !height) return
       const aspect = width / height
       this.camera.aspect = aspect
-      const distance = Math.max(14.1, 20.8 / aspect)
-      this.camera.position.set(0, 4.25 + (distance - 14.1) * .17, distance)
-      this.camera.lookAt(0, 1.45, 0)
+      const distance = Math.max(12.4, 19.1 / aspect)
+      this.camera.position.set(0, 3.72 + (distance - 12.4) * .18, distance)
+      this.camera.lookAt(0, 1.45, .35)
+      this.camera.updateMatrixWorld()
       this.camera.updateProjectionMatrix()
       this.renderer.setSize(width, height, false)
+      this.width = width
+      this.height = height
     }).observe(container)
     let previous = performance.now()
     this.renderer.setAnimationLoop(now => {
@@ -226,11 +290,14 @@ export class TheaterStage {
     if (this.castGroup) {
       const old = this.castGroup
       this.scene.remove(old)
+      for (const person of this.actors) person.label?.remove()
+      const materials = new Set()
       old.traverse(item => {
         if (!item.isMesh) return
         if (![box, ball, cylinder].includes(item.geometry)) item.geometry.dispose()
-        if (![skin, dark, gold].includes(item.material)) item.material.dispose()
+        if (![skin, dark, gold].includes(item.material)) materials.add(item.material)
       })
+      for (const mat of materials) mat.dispose()
     }
     this.castGroup = group(this.scene)
     this.actors = [actor(this.castGroup, 0, -1.95, .72), actor(this.castGroup, 1, 1.95, .72)]
@@ -240,6 +307,8 @@ export class TheaterStage {
     this.rate = 1
     this.override = ''
     this.clock = 0
+    this.endingQueued = false
+    this.beatTime = 0
   }
 
   cast(name) {
@@ -249,54 +318,170 @@ export class TheaterStage {
       const lane = Math.ceil(index / 2)
       this.actors.push(actor(this.castGroup, index, (index % 2 ? 1 : -1) * Math.min(4.25, 1.7 + lane * .8), -.24 - (index - 2) * .19))
     }
-    this.names.set(name, this.actors[index])
+    const person = this.actors[index]
+    this.names.set(name, person)
+    person.spectral = /^(?:the )?ghost$/i.test(name)
+    if (person.spectral) spectralCostume(person)
+    person.label = document.createElement('div')
+    person.label.className = 'cast-label'
+    person.label.textContent = name
+    person.label.hidden = true
+    person.label.setAttribute('aria-hidden', 'true')
+    this.container.append(person.label)
   }
 
   perform(beat) {
     this.beat = beat
+    this.beatTime = this.clock
     const speaker = this.names.get(beat?.speaker)
-    if (speaker) speaker.mark = beat.mark
+    if (!speaker) return
+    speaker.mark = beat.mark
+    if (beat.alternate) {
+      this.endingQueued = false
+      const partner = this.names.get(beat.lookAt)
+      if (partner && partner !== speaker) {
+        const side = Math.sign(speaker.root.position.x - partner.root.position.x) || 1
+        speaker.mark = side * .88
+        partner.mark = -side * .88
+      }
+    }
   }
 
   update(dt) {
-    if (this.paused) return
-    this.clock += dt * this.rate
-    const t = this.clock
-    const speaker = this.names.get(this.beat?.speaker)
-    const addressed = this.names.get(this.beat?.lookAt)
-    for (const person of this.actors) {
-      const { root, body, head, mouth, arms, legs, phase, shadow } = person
-      const active = speaker === person
-      const talking = active && Boolean(this.beat?.line)
-      const emotion = this.override || (active ? this.beat?.emotion : '')
-      const intensity = { angry: 1.45, quiet: .33, uneasy: .75 }[emotion] ?? .95
-      const delta = person.mark - root.position.x
-      const walking = Math.abs(delta) > .045
-      const stride = Math.sin(t * 8 + phase)
-      const settle = 1 - Math.exp(-dt * 10)
-      root.position.x += Math.sign(delta) * Math.min(Math.abs(delta), dt * 1.72 * this.rate)
-      root.position.y = walking ? Math.abs(stride) * .07 : 0
-      shadow.position.x = root.position.x
-      const partner = active ? addressed ?? this.actors.find(other => other !== person) : speaker
-      const face = walking ? Math.sign(delta) * 1.28 : partner && partner !== person ? Math.atan2(partner.root.position.x - root.position.x, 2.65 + partner.z - person.z) : 0
-      root.rotation.y = T.MathUtils.lerp(root.rotation.y, face, settle * .65)
-      body.position.y = Math.sin(t * 2.25 + phase) * .019
-      body.rotation.z = Math.sin(t * 1.45 + phase) * (talking ? .065 : .028)
-      head.rotation.x = T.MathUtils.lerp(head.rotation.x, talking ? Math.sin(t * 6.4) * .105 * intensity + (emotion === 'angry' ? .13 : 0) : -.03, settle)
-      head.rotation.y = Math.sin(t * 1.9 + phase) * .08
-      mouth.scale.y = talking ? .014 + Math.abs(Math.sin(t * 16) * Math.cos(t * 5)) * .055 : .014
-      for (const { shoulder, elbow, side } of arms) {
-        const phrase = .55 + .45 * Math.sin(t * 4.2 + side * 1.23)
-        const gesture = this.override === 'angry' ? 'point' : this.override === 'quiet' ? 'close' : this.beat?.gesture
-        const emphasis = active && (talking || !walking) ? intensity * (side === 1 ? 1 : .58) : 0
-        shoulder.rotation.x = T.MathUtils.lerp(shoulder.rotation.x, walking ? stride * side * .53 : -.12 - emphasis * phrase * (gesture === 'point' ? 1.1 : .62), settle)
-        shoulder.rotation.z = T.MathUtils.lerp(shoulder.rotation.z, side * (.14 + emphasis * phrase * (gesture === 'open' ? .54 : .19)), settle)
-        elbow.rotation.x = T.MathUtils.lerp(elbow.rotation.x, -.17 - emphasis * (gesture === 'point' ? .27 : .59) * phrase, settle)
-      }
-      for (const { hip, knee, side } of legs) {
-        hip.rotation.x = T.MathUtils.lerp(hip.rotation.x, walking ? stride * side * .58 : 0, settle)
-        knee.rotation.x = T.MathUtils.lerp(knee.rotation.x, walking ? Math.max(0, -stride * side) * .8 : 0, settle)
-      }
+    const beat = this.beat
+    const speaker = this.names.get(beat?.speaker)
+    const addressed = this.names.get(beat?.lookAt)
+    const settle = 1 - Math.exp(-dt * 12)
+    const mood = beat?.alternate ? 'quiet' : this.override || beat?.emotion
+    const color = this.paused ? '#8f9bbf' : beat?.alternate ? '#f4c692'
+      : this.endingQueued ? '#cf9be0' : mood === 'angry' ? '#ff8566'
+      : speaker?.spectral ? '#9fd7ff' : this.rate < 1 ? '#c8c1ef' : '#ffe0ad'
+    this.lightColor.set(color)
+    if (this.rate < 1 && !this.paused && !beat?.alternate) {
+      this.lightColor.lerp(this.slowTint, .35)
     }
+    this.key.color.lerp(this.lightColor, settle)
+    this.follow.material.color.copy(this.key.color)
+    const focus = beat?.alternate && addressed && speaker
+      ? (addressed.root.position.x + speaker.root.position.x) / 2 : speaker?.root.position.x ?? 0
+    const lightX = T.MathUtils.lerp(this.key.position.x, focus, settle)
+    this.key.position.set(lightX, 4.8, 3.5)
+    this.key.target.position.set(lightX, 1.25, .7)
+    this.key.intensity = T.MathUtils.lerp(this.key.intensity, speaker ? (this.paused ? 18 : 64) : 0, settle)
+    this.follow.position.x = lightX
+    this.follow.position.z = speaker?.z ?? .72
+    this.follow.scale.setScalar(beat?.alternate ? 1.3 : 1)
+    this.follow.material.opacity = this.key.intensity / 105
+    this.ambient.intensity = T.MathUtils.lerp(this.ambient.intensity, this.paused ? .67 : beat ? 1.28 : 1.7, settle)
+
+    if (!this.paused) this.clock += dt * this.rate
+    for (const person of this.actors) {
+      const active = speaker === person
+      const partner = active ? addressed ?? this.actors.find(other => other !== person) : speaker
+      if (!this.paused) this.pose(person, partner, active, mood, dt, settle)
+      if (!person.label) continue
+      person.head.getWorldPosition(this.labelPoint)
+      this.labelPoint.y += .68
+      this.labelPoint.project(this.camera)
+      const outside = Math.abs(this.labelPoint.x) > .92 || Math.abs(this.labelPoint.y) > .9
+      person.label.hidden = !beat || outside || Math.abs(person.root.position.x) > 4.7
+      person.label.classList.toggle('speaking', active)
+      person.label.style.transform = `translate3d(${(this.labelPoint.x + 1) * this.width / 2}px, ${(1 - this.labelPoint.y) * this.height / 2}px, 0) translate(-50%, -100%)`
+    }
+  }
+
+  pose(person, partner, active, mood, dt, settle) {
+    const { root, body, head, mouth, arms, legs, phase, shadow } = person
+    const t = this.clock
+    const talking = active && Boolean(this.beat?.line)
+    const ending = Boolean(this.beat?.alternate && (active || partner))
+    const angry = mood === 'angry' && Boolean(this.beat)
+    const quiet = mood === 'quiet' && active
+    const uneasy = mood === 'uneasy' && active
+    const delta = person.mark - root.position.x
+    const walking = Math.abs(delta) > .012
+    const turn = Math.sign(delta)
+    const facing = partner && partner !== person
+      ? Math.atan2(partner.root.position.x - root.position.x, 1.9 + partner.z - person.z) * .85 : 0
+    root.rotation.y = T.MathUtils.lerp(root.rotation.y, walking ? turn * Math.PI / 2 : facing, settle)
+    const speed = (person.spectral ? 1.8 : 1.92) * this.rate
+    const alignedSpeed = speed * Math.max(.08, Math.sin(root.rotation.y) * turn)
+    const step = Math.min(Math.abs(delta), dt * alignedSpeed)
+    root.position.x += turn * step
+    person.walkDistance += step / actorScale
+    person.stride = T.MathUtils.lerp(person.stride ?? 0, walking ? Math.min(1, Math.abs(delta) / .22) : 0, settle)
+    shadow.position.x = root.position.x
+
+    const breath = Math.sin(t * 2.55 + phase)
+    const phrase = .5 + .5 * Math.sin((t - this.beatTime) * 4.1 + .7)
+    const punch = phrase ** 2
+    const gesture = this.beat?.gesture
+    const point = talking && (angry || gesture === 'point') && !ending && !quiet
+    const lead = root.rotation.y > .08 ? -1 : 1
+    const audienceSide = root.rotation.y >= 0 ? -1 : 1
+    const recoil = !active && angry && partner
+    root.position.y = person.spectral ? .21 + breath * .09 : 0
+    body.position.y = waistHeight + breath * .022 - (quiet ? .055 : 0) - .04 * person.stride
+    body.rotation.x = T.MathUtils.lerp(body.rotation.x, point ? .32 + punch * .14
+      : recoil ? -.19 : ending ? .19 : uneasy ? -.21 : quiet ? .14 : 0, settle)
+    body.rotation.z = breath * .037 + (point ? -lead * .12 : recoil ? audienceSide * .13 : 0)
+    head.rotation.x = T.MathUtils.lerp(head.rotation.x, point ? .14 + punch * .17
+      : uneasy ? -.24 : quiet ? .2 : talking ? -.13 + punch * .23 : -.025, settle)
+    head.rotation.y = Math.sin(t * 1.9 + phase) * .08 + (talking ? -facing * .23 : 0)
+    person.brows[0].rotation.z = point ? -.35 : uneasy ? .32 : 0
+    person.brows[1].rotation.z = -person.brows[0].rotation.z
+    mouth.scale.y = talking ? .018 + Math.abs(Math.sin(t * 16) * Math.cos(t * 5)) * (point ? .083 : .058) : .014
+
+    for (const { shoulder, elbow, hand, finger, side } of arms) {
+      let lift = -.13
+      let spread = .16
+      let bend = -.22
+      if (point) {
+        lift = side === lead ? -1.40 - punch * .20 : -.65 - punch * .33
+        spread = side === lead ? .48 : .73
+        bend = side === lead ? -.13 - (1 - punch) * .42 : -1.08
+      } else if (ending) {
+        lift = side === lead ? -.96 - punch * .2 : -.39
+        spread = side === lead ? .42 : .32
+        bend = -.56
+      } else if (recoil || uneasy) {
+        lift = -.67
+        spread = .56
+        bend = -1.26 - punch * .24
+      } else if (quiet) {
+        lift = -.43 - punch * .23
+        spread = .23
+        bend = -1.35
+      } else if (talking) {
+        lift = -.48 - punch * (side === lead ? .64 : .38)
+        spread = .57 + punch * .35
+        bend = -.62 - punch * .48
+      } else if (walking && !person.spectral) {
+        lift += Math.cos(person.walkDistance / 1.06 * Math.PI * 2) * side * .40 * person.stride
+      }
+      shoulder.rotation.x = T.MathUtils.lerp(shoulder.rotation.x, lift, settle)
+      shoulder.rotation.z = T.MathUtils.lerp(shoulder.rotation.z, side * spread, settle)
+      elbow.rotation.x = T.MathUtils.lerp(elbow.rotation.x, bend, settle)
+      elbow.rotation.z = T.MathUtils.lerp(elbow.rotation.z, -side * (quiet ? .47 : talking && !point ? .17 : .06), settle)
+      finger.visible = point && side === lead
+      hand.scale.set(point ? .094 : .083, point ? .089 : .118, .079)
+    }
+
+    const cycle = person.walkDistance / 1.06
+    for (const leg of legs) {
+      const progress = (cycle + (leg.side === 1 ? .5 : 0)) % 1
+      const swing = Math.max(0, (progress - .55) / .45)
+      // The contact foot moves back by the distance traveled. Only the swing foot lifts.
+      const travel = .2915 - Math.min(progress, .55) * 1.06 + .583 * swing ** 2 * (3 - 2 * swing)
+      const stride = person.spectral ? 0 : person.stride
+      const lift = Math.sin(swing * Math.PI) * .22 * stride
+      leg.hip.position.y = 1.125 - .045 * stride
+      poseLeg(leg, leg.hip.position.y - .105 - lift, travel * stride + (point ? leg.side * .09 : 0))
+    }
+    person.motes?.children.forEach((mote, i) => {
+      const angle = i * 2.4 + t * .78
+      mote.position.set(Math.cos(angle) * (.59 + .03 * i), .25 + (i * .29 + t * .30) % 2.25, Math.sin(angle) * .42)
+      mote.scale.setScalar(.015 + .016 * (.5 + .5 * Math.sin(t * 2 + i)))
+    })
   }
 }
